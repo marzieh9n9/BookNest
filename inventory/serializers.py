@@ -1,10 +1,5 @@
 from rest_framework import serializers
-from .models import Book, Order, OrderItem
-from django.db import transaction
-
-
-
-
+from .models import (Book,Order,OrderItem,Cart,CartItem,UserAddress,)
 
 
 
@@ -69,96 +64,197 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 
 class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(
+        many=True,
+        read_only=True,
+    )
 
-    items = OrderItemSerializer(many=True, allow_empty=False)
     total_price = serializers.ReadOnlyField()
 
     class Meta:
         model = Order
+
         fields = [
             "id",
             "user",
             "status",
+            "payment_status",
+            "paid_at",
+            "recipient_first_name",
+            "recipient_last_name",
+            "phone_number",
+            "city",
+            "postal_code",
+            "shipping_address",
             "created_at",
             "updated_at",
             "items",
             "total_price",
         ]
+
         read_only_fields = [
             "id",
             "user",
             "status",
+            "payment_status",
+            "paid_at",
+            "recipient_first_name",
+            "recipient_last_name",
+            "phone_number",
+            "city",
+            "postal_code",
+            "shipping_address",
             "created_at",
             "updated_at",
+            "items",
             "total_price",
         ]
 
-    def validate(self, attrs):
-        items_data = attrs.get("items", [])
 
-        book_ids = [
-            item["book"].id
-            for item in items_data
+# ==================================================
+# Shopping cart serializers
+# ==================================================
+
+class CartBookSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Book
+        fields = [
+            "id",
+            "title",
+            "author",
+            "price",
+            "stock",
+            "category",
         ]
 
-        if len(book_ids) != len(set(book_ids)):
-            raise serializers.ValidationError(
-                "A book can appear only once in an order."
-            )
 
-        return attrs
+class CartItemSerializer(serializers.ModelSerializer):
+    book = CartBookSerializer(read_only=True)
+    line_total = serializers.ReadOnlyField()
 
-    @transaction.atomic
-    def create(self, validated_data):
-        items_data = validated_data.pop("items")
+    class Meta:
+        model = CartItem
+        fields = [
+            "id",
+            "book",
+            "quantity",
+            "line_total",
+        ]
+        read_only_fields = [
+            "id",
+            "book",
+            "line_total",
+        ]
 
-        # Lock books in a consistent order to avoid
-        # conflicting simultaneous stock updates.
-        book_ids = sorted({
-            item["book"].pk for item in items_data
-        })
 
-        locked_books = {
-            book.pk: book
-            for book in Book.objects.select_for_update()
-            .filter(pk__in=book_ids)
-            .order_by("pk")
-        }
+class CartSerializer(serializers.ModelSerializer):
+    items = CartItemSerializer(
+        many=True,
+        read_only=True,
+    )
 
-        if len(locked_books) != len(book_ids):
-            raise serializers.ValidationError(
-                {"items": "One or more books no longer exist."}
-            )
+    total_price = serializers.ReadOnlyField()
 
-        # Check the latest stock before creating anything.
-        for item_data in items_data:
-            book = locked_books[item_data["book"].pk]
-            quantity = item_data["quantity"]
+    class Meta:
+        model = Cart
+        fields = [
+            "id",
+            "items",
+            "total_price",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "items",
+            "total_price",
+            "created_at",
+            "updated_at",
+        ]
 
-            if quantity > book.stock:
-                raise serializers.ValidationError({
-                    "items": (
-                        f"Not enough stock for '{book.title}'. "
-                        f"Available: {book.stock}."
-                    )
-                })
 
-        order = Order.objects.create(
-            user=self.context["request"].user
-        )
+class AddCartItemSerializer(serializers.Serializer):
+    book_id = serializers.PrimaryKeyRelatedField(
+        source="book",
+        queryset=Book.objects.all(),
+    )
 
-        for item_data in items_data:
-            book = locked_books[item_data["book"].pk]
-            quantity = item_data["quantity"]
+    quantity = serializers.IntegerField(
+        min_value=1,
+        max_value=100,
+    )
 
-            OrderItem.objects.create(
-                order=order,
-                book=book,
-                quantity=quantity,
-                unit_price=book.price,
-            )
 
-            book.stock -= quantity
-            book.save(update_fields=["stock"])
+class UpdateCartItemSerializer(serializers.Serializer):
+    quantity = serializers.IntegerField(
+        min_value=1,
+        max_value=100,
+    )
 
-        return order
+
+
+
+class CheckoutSerializer(serializers.Serializer):
+    recipient_first_name = serializers.CharField(
+        max_length=100,
+        trim_whitespace=True,
+    )
+
+    recipient_last_name = serializers.CharField(
+        max_length=100,
+        trim_whitespace=True,
+    )
+
+    phone_number = serializers.RegexField(
+        regex=r"^\+?[0-9][0-9\s()-]{7,18}$",
+        max_length=20,
+        error_messages={
+            "invalid": "Enter a valid phone number.",
+        },
+    )
+
+    city = serializers.CharField(
+        max_length=100,
+        trim_whitespace=True,
+    )
+
+    postal_code = serializers.CharField(
+        max_length=20,
+        trim_whitespace=True,
+    )
+
+    shipping_address = serializers.CharField(
+        max_length=1000,
+        trim_whitespace=True,
+    )
+
+class UserAddressSerializer(serializers.ModelSerializer):
+    phone_number = serializers.RegexField(
+        regex=r"^\+?[0-9][0-9\s()-]{7,18}$",
+        max_length=20,
+    )
+
+    class Meta:
+        model = UserAddress
+
+        fields = [
+            "id",
+            "label",
+            "recipient_first_name",
+            "recipient_last_name",
+            "phone_number",
+            "city",
+            "postal_code",
+            "address_line",
+            "is_default",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "created_at",
+            "updated_at",
+        ]
+
+
