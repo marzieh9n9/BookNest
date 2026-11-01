@@ -9,7 +9,12 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from drf_spectacular.utils import (
+    extend_schema,
+    OpenApiResponse,
+    OpenApiParameter,
+    OpenApiTypes,
+)
 
 from .models import (Book, Order, OrderItem, Cart, CartItem,UserAddress,)
 
@@ -21,6 +26,8 @@ from .serializers import (
     UpdateCartItemSerializer,
     CheckoutSerializer,
     UserAddressSerializer,
+    BookPaginationSerializer,
+    DemoPaymentResponseSerializer,
 )
 
 from .permissions import IsAdminOrReadOnly
@@ -37,6 +44,63 @@ class BookListView(APIView):
 
     pagination_class = BookListPagination
 
+    @extend_schema(
+    summary="List books",
+    description=(
+        "Returns a paginated list of books. "
+        "Supports search and filtering."
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="search",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description="Search by book title or author.",
+        ),
+        OpenApiParameter(
+            name="stock",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description="Filter by exact stock quantity.",
+        ),
+        OpenApiParameter(
+            name="price",
+            type=OpenApiTypes.NUMBER,
+            location=OpenApiParameter.QUERY,
+            description="Filter by exact book price.",
+        ),
+        OpenApiParameter(
+            name="category",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description="Filter by category ID.",
+        ),
+        OpenApiParameter(
+            name="ordering",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            enum=[
+                "price",
+                "-price",
+                "stock",
+                "-stock",
+                "title",
+                "-title",
+            ],
+            description="Sort the book list.",
+        ),
+        OpenApiParameter(
+            name="page",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description="Page number.",
+        ),
+    ],
+    responses={
+        200: BookPaginationSerializer,
+    },
+    )
+    
     def get(self, request):
         books = Book.objects.all()
 
@@ -93,6 +157,22 @@ class BookListView(APIView):
             serializer.data
         )
 
+
+    @extend_schema(
+    summary="Create a book",
+    description="Creates a new book. Admin access is required.",
+    request=BookSerializer,
+    responses={
+        201: BookSerializer,
+        400: OpenApiResponse(
+            description="Invalid book data."
+        ),
+        403: OpenApiResponse(
+            description="Admin permission required."
+        ),
+    },
+    )
+    
     def post(self, request):
         serializer = BookSerializer(data=request.data)
 
@@ -110,7 +190,15 @@ class BookListView(APIView):
         )
 class BookDetailView(APIView):
     permission_classes = [IsAdminOrReadOnly]
-
+    @extend_schema(
+    summary="Retrieve a book",
+    responses={
+        200: BookSerializer,
+        404: OpenApiResponse(
+            description="Book not found."
+        ),
+    },
+    )
     def get(self, request, pk):
         book = get_object_or_404(Book, pk=pk)
         serializer = BookSerializer(book)
@@ -128,7 +216,19 @@ class BookDetailView(APIView):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
-
+    @extend_schema(
+    summary="Partially update a book",
+    request=BookSerializer,
+    responses={
+        200: BookSerializer,
+        400: OpenApiResponse(
+            description="Invalid book data."
+        ),
+        403: OpenApiResponse(
+            description="Admin permission required."
+        ),
+    },
+    )
     def patch(self, request, pk):
         book = get_object_or_404(Book, pk=pk)
         serializer = BookSerializer(
@@ -145,7 +245,20 @@ class BookDetailView(APIView):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
-
+    @extend_schema(
+    summary="Delete a book",
+    responses={
+        204: OpenApiResponse(
+            description="Book deleted successfully."
+        ),
+        403: OpenApiResponse(
+            description="Admin permission required."
+        ),
+        404: OpenApiResponse(
+            description="Book not found."
+        ),
+    },
+    )
     def delete(self, request, pk):
         book = get_object_or_404(Book, pk=pk)
         book.delete()
@@ -156,7 +269,16 @@ class BookDetailView(APIView):
 
 class OrderListView(APIView):
     permission_classes = [IsAuthenticated]
-
+    @extend_schema(
+    summary="List my orders",
+    description=(
+        "Customers can see only their own orders. "
+        "Staff users can see all orders."
+    ),
+    responses={
+        200: OrderSerializer(many=True),
+    },
+    )
     def get(self, request):
         if request.user.is_staff:
             orders = Order.objects.all()
@@ -179,7 +301,19 @@ class OrderListView(APIView):
 
 class OrderDetailView(APIView):
     permission_classes = [IsAuthenticated]
-
+    @extend_schema(
+    summary="Retrieve an order",
+    description=(
+        "Customers can retrieve only their own orders. "
+        "Staff users can retrieve all orders."
+    ),
+    responses={
+        200: OrderSerializer,
+        404: OpenApiResponse(
+            description="Order not found."
+        ),
+    },
+    )
     def get(self, request, pk):
         orders = Order.objects.prefetch_related(
             "items__book"
@@ -205,7 +339,22 @@ class OrderDetailView(APIView):
 
 class OrderCancelView(APIView):
     permission_classes = [IsAuthenticated]
-
+    @extend_schema(
+    summary="Cancel an order",
+    description=(
+        "Cancels a pending order and restores "
+        "the reserved book quantities to stock."
+    ),
+    responses={
+        200: OrderSerializer,
+        400: OpenApiResponse(
+            description="Only pending orders can be cancelled."
+        ),
+        404: OpenApiResponse(
+            description="Order not found."
+        ),
+    },
+    )
     def post(self, request, pk):
         with transaction.atomic():
             order = get_object_or_404(
@@ -264,7 +413,13 @@ class OrderCancelView(APIView):
 
 class CartView(APIView):
     permission_classes = [IsAuthenticated]
-
+    @extend_schema(
+    summary="Retrieve shopping cart",
+    description="Returns the authenticated user's shopping cart.",
+    responses={
+        200: CartSerializer,
+    },
+    )
     def get(self, request):
         cart, _ = Cart.objects.get_or_create(
             user=request.user
@@ -277,7 +432,14 @@ class CartView(APIView):
         serializer = CartSerializer(cart)
 
         return Response(serializer.data)
-
+    @extend_schema(
+    summary="Clear shopping cart",
+    responses={
+        204: OpenApiResponse(
+            description="Shopping cart cleared."
+        ),
+    },
+    )
     def delete(self, request):
         cart = Cart.objects.filter(
             user=request.user
@@ -294,7 +456,16 @@ class CartView(APIView):
 
 class CartItemAddView(APIView):
     permission_classes = [IsAuthenticated]
-
+    @extend_schema(
+    summary="Add a book to cart",
+    request=AddCartItemSerializer,
+    responses={
+        200: CartSerializer,
+        400: OpenApiResponse(
+            description="Invalid quantity or insufficient stock."
+        ),
+    },
+    )
     def post(self, request):
         serializer = AddCartItemSerializer(
             data=request.data
@@ -380,7 +551,19 @@ class CartItemAddView(APIView):
 
 class CartItemDetailView(APIView):
     permission_classes = [IsAuthenticated]
-
+    @extend_schema(
+    summary="Update cart item quantity",
+    request=UpdateCartItemSerializer,
+    responses={
+        200: CartSerializer,
+        400: OpenApiResponse(
+            description="Invalid quantity or insufficient stock."
+        ),
+        404: OpenApiResponse(
+            description="Cart item not found."
+        ),
+    },
+    )
     def patch(self, request, pk):
         serializer = UpdateCartItemSerializer(
             data=request.data
@@ -433,7 +616,17 @@ class CartItemDetailView(APIView):
             CartSerializer(cart).data,
             status=status.HTTP_200_OK,
         )
-
+    @extend_schema(
+    summary="Remove an item from cart",
+    responses={
+        204: OpenApiResponse(
+            description="Cart item removed."
+        ),
+        404: OpenApiResponse(
+            description="Cart item not found."
+        ),
+    },
+    )
     def delete(self, request, pk):
         with transaction.atomic():
             item = get_object_or_404(
@@ -458,13 +651,23 @@ class CheckoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        request=CheckoutSerializer,
-        responses={
-            201: OrderSerializer,
-            400: OpenApiResponse(
-                description="The cart is empty or stock is insufficient.",
-            ),
-        },
+    summary="Checkout shopping cart",
+    description=(
+        "Creates an order from the authenticated user's cart. "
+        "Validates current stock and calculates prices on the server. "
+        "The cart is cleared after successful order creation. "
+        "Payment remains unpaid until the demo payment endpoint is used."
+    ),
+    request=CheckoutSerializer,
+    responses={
+        201: OrderSerializer,
+        400: OpenApiResponse(
+            description="Cart is empty or stock is insufficient."
+        ),
+        401: OpenApiResponse(
+            description="Authentication required."
+        ),
+    },
     )
     def post(self, request):
         checkout_serializer = CheckoutSerializer(
@@ -574,21 +777,22 @@ class CheckoutView(APIView):
 class DemoPaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
+    
     @extend_schema(
-        responses={
-            200: OpenApiResponse(
-                description=(
-                    "Demo payment recorded successfully. "
-                    "No real money was charged."
-                ),
-            ),
-            400: OpenApiResponse(
-                description="The order cannot be paid in its current state.",
-            ),
-            404: OpenApiResponse(
-                description="Order not found.",
-            ),
-        },
+    summary="Simulate order payment",
+    description=(
+        "Marks an eligible pending order as paid for demonstration "
+        "purposes only. No real money is charged."
+    ),
+    responses={
+        200: DemoPaymentResponseSerializer,
+        400: OpenApiResponse(
+            description="Order cannot be paid."
+        ),
+        404: OpenApiResponse(
+            description="Order not found."
+        ),
+    },
     )
     def post(self, request, pk):
         with transaction.atomic():
@@ -649,7 +853,12 @@ class DemoPaymentView(APIView):
 
 class UserAddressListCreateView(APIView):
     permission_classes = [IsAuthenticated]
-
+    @extend_schema(
+    summary="List my saved addresses",
+    responses={
+        200: UserAddressSerializer(many=True),
+    },
+    )
     def get(self, request):
         addresses = UserAddress.objects.filter(
             user=request.user
@@ -661,7 +870,16 @@ class UserAddressListCreateView(APIView):
         )
 
         return Response(serializer.data)
-
+    @extend_schema(
+    summary="Create a saved address",
+    request=UserAddressSerializer,
+    responses={
+        201: UserAddressSerializer,
+        400: OpenApiResponse(
+            description="Invalid address data."
+        ),
+    },
+    )
     def post(self, request):
         serializer = UserAddressSerializer(
             data=request.data
@@ -707,14 +925,34 @@ class UserAddressDetailView(APIView):
             pk=pk,
             user=request.user,
         )
-
+    @extend_schema(
+    summary="Retrieve a saved address",
+    responses={
+        200: UserAddressSerializer,
+        404: OpenApiResponse(
+            description="Address not found."
+        ),
+    },
+    )
     def get(self, request, pk):
         address = self.get_object(request, pk)
 
         serializer = UserAddressSerializer(address)
 
         return Response(serializer.data)
-
+    @extend_schema(
+    summary="Update a saved address",
+    request=UserAddressSerializer,
+    responses={
+        200: UserAddressSerializer,
+        400: OpenApiResponse(
+            description="Invalid address data."
+        ),
+        404: OpenApiResponse(
+            description="Address not found."
+        ),
+    },
+    )
     def patch(self, request, pk):
         with transaction.atomic():
             # Find and lock only the current user's address.
@@ -752,7 +990,17 @@ class UserAddressDetailView(APIView):
         return Response(
             UserAddressSerializer(updated_address).data
         )
-
+    @extend_schema(
+    summary="Delete a saved address",
+    responses={
+        204: OpenApiResponse(
+            description="Address deleted."
+        ),
+        404: OpenApiResponse(
+            description="Address not found."
+        ),
+    },
+    )
     def delete(self, request, pk):
         with transaction.atomic():
             address = get_object_or_404(

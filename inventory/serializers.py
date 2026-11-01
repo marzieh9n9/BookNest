@@ -32,6 +32,28 @@ class BookSerializer(serializers.ModelSerializer):
         ]
 
 
+
+
+
+class BookPaginationSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+
+    next = serializers.URLField(
+        allow_null=True,
+    )
+
+    previous = serializers.URLField(
+        allow_null=True,
+    )
+
+    results = BookSerializer(
+        many=True,
+    )
+
+
+
+
+
 class OrderItemSerializer(serializers.ModelSerializer):
 
     line_total = serializers.ReadOnlyField()
@@ -258,3 +280,16 @@ class UserAddressSerializer(serializers.ModelSerializer):
         ]
 
 
+class DemoPaymentResponseSerializer(serializers.Serializer):
+    order_id = serializers.IntegerField()
+
+    payment_status = serializers.CharField()
+
+    order_status = serializers.CharField()
+
+    paid_at = serializers.DateTimeField()
+
+    detail = serializers.CharField()
+
+
+    
