@@ -1,4 +1,4 @@
-\# BookNest — Bookstore Management API
+# BookNest — BookNest — Online Bookstore Backend
 
 
 
@@ -6,51 +6,51 @@ BookNest is a Django REST API project for managing bookstore inventory. It is bu
 
 
 
-\## Features
+## Features
 
 
 
-\- Book management through REST API endpoints
+- Book management through REST API endpoints
 
-\- Category model and book-category relationship
+- Category model and book-category relationship
 
-\- JWT authentication using access and refresh tokens
+- JWT authentication using access and refresh tokens
 
-\- Read access to book endpoints and staff-only write permissions
+- Read access to book endpoints and staff-only write permissions
 
-\- Search by book title and author
+- Search by book title and author
 
-\- Filtering, ordering, and pagination
+- Filtering, ordering, and pagination
 
-\- Model and serializer validation
+- Model and serializer validation
 
-\- Interactive API documentation
+- Interactive API documentation
 
-\- Automated tests
+- Automated tests
 
-\- Order and order-item data models
-
-
-
-\## Technology Stack
+- Order and order-item data models
 
 
 
-\- Python
-
-\- Django
-
-\- Django REST Framework
-
-\- PostgreSQL
-
-\- Simple JWT
-
-\- OpenAPI / Swagger documentation
+## Technology Stack
 
 
 
-\## Main Endpoints
+- Python
+
+- Django
+
+- Django REST Framework
+
+- PostgreSQL
+
+- Simple JWT
+
+- OpenAPI / Swagger documentation
+
+
+
+## Main Endpoints
 
 
 
@@ -76,7 +76,7 @@ BookNest is a Django REST API project for managing bookstore inventory. It is bu
 
 
 
-\## API Documentation
+## API Documentation
 
 
 
@@ -92,7 +92,7 @@ The interactive documentation helps developers explore the API endpoints and und
 
 
 
-\## Local Setup
+## Local Setup
 
 
 
@@ -140,7 +140,7 @@ The database must be configured and available before applying migrations. Do not
 
 
 
-\## Tests
+## Tests
 
 
 
@@ -156,7 +156,7 @@ python manage.py test inventory
 
 
 
-\## Project Status
+## Project Status
 
 
 
