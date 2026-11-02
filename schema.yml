@@ -243,7 +243,7 @@ paths:
           description: Account created successfully.
   /api/books/:
     get:
-      operationId: books_retrieve
+      operationId: book_list
       description: Returns a paginated list of books. Supports search and filtering.
       summary: List books
       parameters:
@@ -286,8 +286,6 @@ paths:
         description: Filter by exact stock quantity.
       tags:
       - books
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -328,7 +326,7 @@ paths:
           description: Admin permission required.
   /api/books/{id}/:
     get:
-      operationId: books_retrieve_2
+      operationId: book_detail_retrieve
       summary: Retrieve a book
       parameters:
       - in: path
@@ -338,8 +336,6 @@ paths:
         required: true
       tags:
       - books
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -359,11 +355,27 @@ paths:
         required: true
       tags:
       - books
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Book'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Book'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Book'
+        required: true
       security:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+          description: ''
     patch:
       operationId: books_partial_update
       summary: Partially update a book
@@ -609,9 +621,8 @@ paths:
           description: Order not found.
   /api/orders/{id}/cancel/:
     post:
-      operationId: orders_cancel_create
-      description: Cancels a pending order and restores the reserved book quantities
-        to stock.
+      operationId: order_cancel
+      description: Cancels a pending order and restores the book quantities to stock.
       summary: Cancel an order
       parameters:
       - in: path
@@ -636,9 +647,9 @@ paths:
           description: Order not found.
   /api/orders/{id}/simulate-payment/:
     post:
-      operationId: orders_simulate_payment_create
-      description: Marks an eligible pending order as paid for demonstration purposes
-        only. No real money is charged.
+      operationId: order_simulate_payment
+      description: Marks an eligible order as paid for demonstration purposes only.
+        No real money is charged.
       summary: Simulate order payment
       parameters:
       - in: path
@@ -939,6 +950,8 @@ components:
           readOnly: true
         total_price:
           type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
           readOnly: true
         created_at:
           type: string
@@ -999,6 +1012,8 @@ components:
           minimum: 1
         line_total:
           type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           readOnly: true
       required:
       - book
@@ -1121,6 +1136,8 @@ components:
           readOnly: true
         total_price:
           type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
           readOnly: true
       required:
       - city
@@ -1157,6 +1174,8 @@ components:
           readOnly: true
         line_total:
           type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           readOnly: true
       required:
       - book
